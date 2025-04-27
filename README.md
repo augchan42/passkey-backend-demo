@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS public.passkey_credentials (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     credential_id TEXT NOT NULL UNIQUE,
-    public_key BYTEA NOT NULL,
+    public_key text not null,     -- Will store base64 string
     counter BIGINT NOT NULL,
     device_type TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
