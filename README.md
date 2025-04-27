@@ -20,6 +20,14 @@ POST /api/passkey/register/verify
 
 Verifies a passkey registration. Requires the registration response from the client.
 
+Response:
+```json
+{
+  "verified": true,
+  "userId": "user-uuid"
+}
+```
+
 ### Authentication
 
 #### Generate Authentication Options
@@ -36,6 +44,20 @@ POST /api/passkey/authenticate/verify
 
 Verifies a passkey authentication. Requires the authentication response from the client.
 
+Response:
+```json
+{
+  "verified": true,
+  "userId": "user-uuid",
+  "token": "jwt-token"
+}
+```
+
+The JWT token contains:
+- `userId`: The authenticated user's ID
+- `iat`: Issued at timestamp
+- `exp`: Expiration timestamp (24 hours from issuance)
+
 ## Environment Variables
 
 Create a `.env.local` file with the following variables:
@@ -45,6 +67,7 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 NEXT_PUBLIC_RP_ID=your_relying_party_id
 NEXT_PUBLIC_ORIGIN=your_origin
+JWT_SECRET=your_jwt_secret_key
 ```
 
 ## Database Schema
@@ -79,6 +102,7 @@ To integrate with an iOS/Swift frontend:
 1. Use the `ASAuthorizationPlatformPublicKeyCredentialProvider` for passkey operations
 2. Make HTTP requests to the API endpoints
 3. Handle the WebAuthn responses appropriately
+4. Store the JWT token securely (e.g., in Keychain) for authenticated requests
 
 Example registration flow:
 1. Call `/api/passkey/register` to get registration options
@@ -89,6 +113,11 @@ Example authentication flow:
 1. Call `/api/passkey/authenticate` to get authentication options
 2. Use the options with `ASAuthorizationPlatformPublicKeyCredentialProvider` to authenticate
 3. Send the authentication result to `/api/passkey/authenticate/verify` to complete authentication
+4. Store the received JWT token for future authenticated requests
+5. Include the token in the `Authorization` header for subsequent requests:
+   ```
+   Authorization: Bearer <token>
+   ```
 
 ## Development
 
