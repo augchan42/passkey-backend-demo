@@ -29,12 +29,44 @@ function base64urlToBuffer(base64url: string): ArrayBuffer {
   return buffer;
 }
 
+// Helper function to decode JWT
+function decodeJWT(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return { error: 'Invalid token' };
+  }
+}
+
+// Helper function to format timestamp
+function formatTimestamp(timestamp: number) {
+  return new Date(timestamp * 1000).toLocaleString();
+}
+
+// Helper function to get time until expiry
+function getTimeUntilExpiry(expiryTimestamp: number) {
+  const now = Math.floor(Date.now() / 1000);
+  const seconds = expiryTimestamp - now;
+  if (seconds <= 0) return 'Expired';
+  
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours}h ${minutes}m remaining`;
+}
+
 export default function Home() {
   const [status, setStatus] = useState<string>('');
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   const handleRegister = async () => {
     try {
       setStatus('Starting registration...');
+      setDebugInfo(null);
       
       // Get registration options from server
       const optionsRes = await fetch('/api/passkey/register', {
@@ -86,6 +118,10 @@ export default function Home() {
       
       if (verification.verified) {
         setStatus('Registration successful! You can now authenticate with this passkey.');
+        setDebugInfo({
+          type: 'registration',
+          result: verification
+        });
       } else {
         setStatus('Registration failed');
       }
@@ -98,6 +134,7 @@ export default function Home() {
   const handleAuthenticate = async () => {
     try {
       setStatus('Starting authentication...');
+      setDebugInfo(null);
       
       // Get authentication options from server
       const optionsRes = await fetch('/api/passkey/authenticate', {
@@ -147,6 +184,12 @@ export default function Home() {
       
       if (verification.verified) {
         setStatus('Authentication successful! Welcome back.');
+        setDebugInfo({
+          type: 'authentication',
+          result: verification,
+          token: verification.token,
+          decodedToken: verification.token ? decodeJWT(verification.token) : null
+        });
       } else {
         setStatus('Authentication failed');
       }
@@ -178,6 +221,59 @@ export default function Home() {
         {status && (
           <div className="mt-4 p-4 rounded bg-gray-100 dark:bg-gray-800">
             <p>{status}</p>
+          </div>
+        )}
+
+        {debugInfo && (
+          <div className="mt-4 p-4 rounded bg-gray-100 dark:bg-gray-800">
+            <h2 className="font-bold mb-2">Debug Information:</h2>
+            <div className="space-y-4">
+              {debugInfo.type === 'authentication' && (
+                <>
+                  <div>
+                    <h3 className="font-semibold text-sm">Authentication Result:</h3>
+                    <pre className="text-xs bg-gray-200 dark:bg-gray-700 p-2 rounded">
+                      {JSON.stringify(debugInfo.result, null, 2)}
+                    </pre>
+                  </div>
+                  
+                  <div>
+                    <h3 className="font-semibold text-sm">JWT Token:</h3>
+                    <div className="text-xs bg-gray-200 dark:bg-gray-700 p-2 rounded">
+                      <div className="whitespace-pre-wrap break-all font-mono">
+                        {debugInfo.token.split('.').map((part: string, index: number) => (
+                          <div key={index} className="mb-1">
+                            {index === 0 ? 'Header: ' : index === 1 ? 'Payload: ' : 'Signature: '}
+                            {part}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h3 className="font-semibold text-sm">Decoded Token:</h3>
+                    <pre className="text-xs bg-gray-200 dark:bg-gray-700 p-2 rounded">
+                      {JSON.stringify({
+                        ...debugInfo.decodedToken,
+                        iat: `${debugInfo.decodedToken.iat} (${formatTimestamp(debugInfo.decodedToken.iat)})`,
+                        exp: `${debugInfo.decodedToken.exp} (${formatTimestamp(debugInfo.decodedToken.exp)})`,
+                        expiresIn: getTimeUntilExpiry(debugInfo.decodedToken.exp)
+                      }, null, 2)}
+                    </pre>
+                  </div>
+                </>
+              )}
+              
+              {debugInfo.type === 'registration' && (
+                <div>
+                  <h3 className="font-semibold text-sm">Registration Result:</h3>
+                  <pre className="text-xs bg-gray-200 dark:bg-gray-700 p-2 rounded">
+                    {JSON.stringify(debugInfo.result, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
