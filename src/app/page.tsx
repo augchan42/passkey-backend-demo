@@ -1,103 +1,186 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import type { 
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from '@simplewebauthn/types';
+
+function bufferToBase64url(buffer: ArrayBuffer | null): string | null {
+  if (!buffer) return null;
+  const bytes = new Uint8Array(buffer);
+  let str = '';
+  for (const byte of bytes) {
+    str += String.fromCharCode(byte);
+  }
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function base64urlToBuffer(base64url: string): ArrayBuffer {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padLength = (4 - (base64.length % 4)) % 4;
+  const padded = base64 + '='.repeat(padLength);
+  const binary = atob(padded);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return buffer;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [status, setStatus] = useState<string>('');
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+  const handleRegister = async () => {
+    try {
+      setStatus('Starting registration...');
+      
+      // Get registration options from server
+      const optionsRes = await fetch('/api/passkey/register', {
+        method: 'POST',
+      });
+      const optionsJSON: PublicKeyCredentialCreationOptionsJSON = await optionsRes.json();
+
+      // Convert options from JSON to binary format
+      const options: PublicKeyCredentialCreationOptions = {
+        ...optionsJSON,
+        challenge: base64urlToBuffer(optionsJSON.challenge),
+        user: {
+          ...optionsJSON.user,
+          id: Uint8Array.from(optionsJSON.user.id, c => c.charCodeAt(0)),
+        },
+        excludeCredentials: optionsJSON.excludeCredentials?.map(credential => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id),
+          transports: credential.transports as AuthenticatorTransport[],
+        })),
+      };
+
+      // Create credentials
+      const credential = await navigator.credentials.create({
+        publicKey: options,
+      }) as PublicKeyCredential;
+
+      // Convert credential to JSON for transmission
+      const credentialJSON = {
+        id: credential.id,
+        type: credential.type,
+        rawId: bufferToBase64url(credential.rawId),
+        response: {
+          clientDataJSON: bufferToBase64url((credential.response as AuthenticatorAttestationResponse).clientDataJSON),
+          attestationObject: bufferToBase64url((credential.response as AuthenticatorAttestationResponse).attestationObject),
+        },
+      };
+
+      // Verify registration with server
+      const verificationRes = await fetch('/api/passkey/register/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentialJSON),
+      });
+
+      const verification = await verificationRes.json();
+      
+      if (verification.verified) {
+        setStatus('Registration successful! You can now authenticate with this passkey.');
+      } else {
+        setStatus('Registration failed');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setStatus('Registration failed: ' + (error as Error).message);
+    }
+  };
+
+  const handleAuthenticate = async () => {
+    try {
+      setStatus('Starting authentication...');
+      
+      // Get authentication options from server
+      const optionsRes = await fetch('/api/passkey/authenticate', {
+        method: 'POST',
+      });
+      const optionsJSON: PublicKeyCredentialRequestOptionsJSON = await optionsRes.json();
+
+      // Convert options from JSON to binary format
+      const options: PublicKeyCredentialRequestOptions = {
+        ...optionsJSON,
+        challenge: base64urlToBuffer(optionsJSON.challenge),
+        allowCredentials: optionsJSON.allowCredentials?.map(credential => ({
+          ...credential,
+          id: base64urlToBuffer(credential.id),
+          transports: credential.transports as AuthenticatorTransport[],
+        })),
+      };
+
+      // Get credentials
+      const credential = await navigator.credentials.get({
+        publicKey: options,
+      }) as PublicKeyCredential;
+
+      // Convert credential to JSON for transmission
+      const credentialJSON = {
+        id: credential.id,
+        type: credential.type,
+        rawId: bufferToBase64url(credential.rawId),
+        response: {
+          clientDataJSON: bufferToBase64url((credential.response as AuthenticatorAssertionResponse).clientDataJSON),
+          authenticatorData: bufferToBase64url((credential.response as AuthenticatorAssertionResponse).authenticatorData),
+          signature: bufferToBase64url((credential.response as AuthenticatorAssertionResponse).signature),
+          userHandle: bufferToBase64url((credential.response as AuthenticatorAssertionResponse).userHandle),
+        },
+      };
+
+      // Verify authentication with server
+      const verificationRes = await fetch('/api/passkey/authenticate/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentialJSON),
+      });
+
+      const verification = await verificationRes.json();
+      
+      if (verification.verified) {
+        setStatus('Authentication successful! Welcome back.');
+      } else {
+        setStatus('Authentication failed');
+      }
+    } catch (error) {
+      console.error('Authentication error:', error);
+      setStatus('Authentication failed: ' + (error as Error).message);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-4">
+      <h1 className="text-2xl font-bold mb-4">Passkey Demo</h1>
+      
+      <div className="flex flex-col gap-4 w-full max-w-md">
+        <button
+          onClick={handleRegister}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+          Register Passkey
+        </button>
+        
+        <button
+          onClick={handleAuthenticate}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
         >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          Authenticate with Passkey
+        </button>
+        
+        {status && (
+          <div className="mt-4 p-4 rounded bg-gray-100 dark:bg-gray-800">
+            <p>{status}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
