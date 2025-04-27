@@ -12,6 +12,7 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/types";
+import { generateUsername } from "@/app/actions/generateUsername";
 
 const rpName = "Passkey Demo";
 const rpID = process.env.NEXT_PUBLIC_RP_ID || "localhost";
@@ -35,11 +36,13 @@ export async function generateRegistrationOptionsForUser(
   const userId = new Uint8Array(16);
   crypto.getRandomValues(userId);
 
+  const { name: generatedUsername } = await generateUsername();
+
   const options = await generateRegistrationOptions({
     rpName,
     rpID,
     userID: userId,
-    userName: userId.toString(), // We'll update this after user creation
+    userName: generatedUsername,
     attestationType: "none",
     authenticatorSelection: {
       residentKey: "required",
