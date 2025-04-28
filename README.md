@@ -13,6 +13,26 @@ POST /api/passkey/register
 
 Generates options for registering a new passkey. No authentication required.
 
+**iOS-specific notes:**
+- The response is formatted to match iOS expectations:
+  - The `challenge` is returned as standard base64 (not base64url).
+  - The `rpId` is provided as a top-level property.
+  - CORS headers are set to allow requests from iOS apps.
+- Example response:
+```json
+{
+  "rpId": "your-relying-party-id",
+  "challenge": "base64-encoded-challenge",
+  "timeout": 60000,
+  "userVerification": "preferred",
+  "user": {
+    "id": "user-id",
+    "name": "username",
+    "displayName": "User Display Name"
+  }
+}
+```
+
 #### Verify Registration
 ```http
 POST /api/passkey/register/verify
@@ -103,6 +123,11 @@ To integrate with an iOS/Swift frontend:
 2. Make HTTP requests to the API endpoints
 3. Handle the WebAuthn responses appropriately
 4. Store the JWT token securely (e.g., in Keychain) for authenticated requests
+
+**Important for iOS:**
+- The `/api/passkey/register` endpoint returns the `challenge` in standard base64 encoding, as required by iOS. If you see errors about challenge format, ensure you are not re-encoding or decoding it incorrectly on the client.
+- CORS headers are set to allow requests from iOS apps. If you encounter CORS issues, check your network requests and ensure the app is using HTTPS in production.
+- To enable passkey sharing between your iOS app and your website, you must configure the [apple-app-site-association](#associated-domains-setup) file and set up Associated Domains in your Xcode project. See the section below for detailed instructions.
 
 Example registration flow:
 1. Call `/api/passkey/register` to get registration options
