@@ -38,8 +38,12 @@ function decodeJWT(token: string) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
     return JSON.parse(jsonPayload);
-  } catch (e) {
-    return { error: 'Invalid token' };
+  } catch (error) {
+    return { 
+      error: 'Invalid token',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    };
   }
 }
 
@@ -59,9 +63,35 @@ function getTimeUntilExpiry(expiryTimestamp: number) {
   return `${hours}h ${minutes}m remaining`;
 }
 
+type AuthenticationResult = {
+  verified: boolean;
+  userId: string;
+  token?: string;
+};
+
+type DecodedToken = {
+  userId: string;
+  iat: number;
+  exp: number;
+} | {
+  error: string;
+  message: string;
+  stack?: string;
+};
+
+type DebugInfo = {
+  type: 'authentication';
+  result: AuthenticationResult;
+  token?: string;
+  decodedToken?: DecodedToken;
+} | {
+  type: 'registration';
+  result: AuthenticationResult;
+};
+
 export default function Home() {
   const [status, setStatus] = useState<string>('');
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
 
   const handleRegister = async () => {
     try {
@@ -241,7 +271,7 @@ export default function Home() {
                     <h3 className="font-semibold text-sm">JWT Token:</h3>
                     <div className="text-xs bg-gray-200 dark:bg-gray-700 p-2 rounded">
                       <div className="whitespace-pre-wrap break-all font-mono">
-                        {debugInfo.token.split('.').map((part: string, index: number) => (
+                        {debugInfo.token?.split('.').map((part: string, index: number) => (
                           <div key={index} className="mb-1">
                             {index === 0 ? 'Header: ' : index === 1 ? 'Payload: ' : 'Signature: '}
                             {part}
@@ -256,9 +286,11 @@ export default function Home() {
                     <pre className="text-xs bg-gray-200 dark:bg-gray-700 p-2 rounded">
                       {JSON.stringify({
                         ...debugInfo.decodedToken,
-                        iat: `${debugInfo.decodedToken.iat} (${formatTimestamp(debugInfo.decodedToken.iat)})`,
-                        exp: `${debugInfo.decodedToken.exp} (${formatTimestamp(debugInfo.decodedToken.exp)})`,
-                        expiresIn: getTimeUntilExpiry(debugInfo.decodedToken.exp)
+                        ...(debugInfo.decodedToken && 'iat' in debugInfo.decodedToken ? {
+                          iat: `${debugInfo.decodedToken.iat} (${formatTimestamp(debugInfo.decodedToken.iat)})`,
+                          exp: `${debugInfo.decodedToken.exp} (${formatTimestamp(debugInfo.decodedToken.exp)})`,
+                          expiresIn: getTimeUntilExpiry(debugInfo.decodedToken.exp)
+                        } : {})
                       }, null, 2)}
                     </pre>
                   </div>
