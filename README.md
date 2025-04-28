@@ -119,16 +119,56 @@ Example authentication flow:
    Authorization: Bearer <token>
    ```
 
+## Associated Domains Setup
+
+To enable passkey sharing between your iOS app and website:
+
+### 1. Add Associated Domains in Xcode
+1. Go to your project target → Signing & Capabilities
+2. Click the + Capability button
+3. Add Associated Domains
+4. Add an entry:
+   ```
+   webcredentials:your-backend-domain.com
+   ```
+   Example:
+   ```
+   webcredentials:passkey-backend-demo.vercel.app
+   ```
+
+### 2. Configure apple-app-site-association File
+The project includes a template file at `public/.well-known/apple-app-site-association`. You need to:
+
+1. Replace the placeholders in the file:
+   ```json
+   {
+     "webcredentials": {
+       "apps": ["TEAM_ID.BUNDLE_ID"]
+     }
+   }
+   ```
+   Replace:
+   - `TEAM_ID`: Your Apple Developer Team ID
+   - `BUNDLE_ID`: Your app's bundle identifier (e.g., `com.example.peepsapp`)
+
+2. The file will be served at:
+   ```
+   https://your-backend-domain.com/.well-known/apple-app-site-association
+   ```
+
+### 3. Deploy the File
+- The file is included in the `public` directory and will be automatically served by Next.js
+- For production, ensure your domain is properly configured to serve the file
+
+### When to Use Associated Domains
+- **Use**: If you want to share passkeys between your iOS app and website
+- **Don't Use**: If your app uses passkeys only for in-app authentication
+
+### Benefits
+- Enables seamless passkey login across app and website
+- Allows users to use the same passkey for both platforms
+- Required for Apple passkey APIs to work with your web domain
+
 ## Development
 
-```bash
-npm install
-npm run dev
-```
-
-## Production
-
-```bash
-npm run build
-npm start
 ```
