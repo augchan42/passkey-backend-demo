@@ -9,6 +9,17 @@ export async function POST() {
     // Generate registration options without requiring authentication
     const options = await generateRegistrationOptionsForUser(supabase);
 
+    // Log the response we're about to send
+    console.log("Sending registration options response:", {
+      options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      }
+    });
+
     // Add proper headers for CORS and content type
     return NextResponse.json(options, {
       headers: {
