@@ -9,9 +9,22 @@ export async function POST() {
     // Generate registration options without requiring authentication
     const options = await generateRegistrationOptionsForUser(supabase);
 
+    // Transform the options to match the iOS app's expected format
+    const transformedOptions = {
+      rpId: options.rp.id,
+      challenge: options.challenge,
+      timeout: options.timeout,
+      userVerification: options.authenticatorSelection?.userVerification,
+      user: {
+        id: options.user.id,
+        name: options.user.name,
+        displayName: options.user.displayName
+      }
+    };
+
     // Log the response we're about to send
     console.log("Sending registration options response:", {
-      options,
+      options: transformedOptions,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -21,7 +34,7 @@ export async function POST() {
     });
 
     // Add proper headers for CORS and content type
-    return NextResponse.json(options, {
+    return NextResponse.json(transformedOptions, {
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
