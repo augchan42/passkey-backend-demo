@@ -16,7 +16,7 @@
     "@supabase/supabase-js": "^2.49.4",
     "@types/jsonwebtoken": "^9.0.9",
     "jsonwebtoken": "^9.0.2",
-    "next": "15.3.1",
+    "next": "15.3.8",
     "pg": "^8.15.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
